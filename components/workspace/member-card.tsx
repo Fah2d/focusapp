@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 import { BarChart2 } from "lucide-react";
 import { ReportPanel } from "@/components/workspace/ReportPanel";
 import { DailyTodoPopover } from "@/components/workspace/DailyTodoPopover";
+import { ProfileCustomizerPopover } from "@/components/workspace/ProfileCustomizerPopover";
+import type { EquippedRewards } from "@/types/rewards";
 
 // Border color + outer glow per mode, with dimmed variants for paused state.
 // Background is NEVER changed — only border and shadow.
@@ -37,6 +39,7 @@ interface Props {
   focusMinutesToday: number;
   workspaceId: string;
   currentUserId: string;
+  equippedRewards?: EquippedRewards | null;
 }
 
 export function MemberCard({
@@ -48,6 +51,7 @@ export function MemberCard({
   focusMinutesToday,
   workspaceId,
   currentUserId,
+  equippedRewards,
 }: Props) {
   const [secondsLeft, setSecondsLeft] = useState<number>(25 * 60);
   const [reportOpen, setReportOpen] = useState(false);
@@ -84,6 +88,9 @@ export function MemberCard({
     ? GLOW[activeMode][isPaused ? "paused" : "run"]
     : "";
 
+  const cardThemeClass = equippedRewards?.card_theme ?? "";
+  const glowEffectClass = !activeMode ? (equippedRewards?.glow ?? "") : "";
+
   return (
     <div
       className={cn(
@@ -95,7 +102,9 @@ export function MemberCard({
               isOnline ? "border-border hover:border-primary/40" : "border-border/50",
               !isOnline && "opacity-75"
             ),
-        isCurrentUser && "ring-1 ring-primary/20"
+        isCurrentUser && "ring-1 ring-primary/20",
+        cardThemeClass,
+        glowEffectClass
       )}
     >
       {/* Top-right: todo icon + report icon + online indicator */}
@@ -121,20 +130,42 @@ export function MemberCard({
         />
       </div>
 
-      {/* Avatar */}
-      <Avatar className="h-14 w-14 ring-2 ring-border">
-        <AvatarImage src={profile.avatar_url ?? undefined} alt={profile.name} />
-        <AvatarFallback className="bg-primary/20 text-primary font-bold text-lg">
-          {getInitials(profile.name)}
-        </AvatarFallback>
-      </Avatar>
+      {/* Nameplate wrapper — stretches to card edges when equipped */}
+      <div className={cn(
+        "self-stretch -mx-5 -mt-5 rounded-t-2xl px-5 pt-5 pb-4 flex flex-col items-center gap-2",
+        equippedRewards?.nameplate ?? ""
+      )}>
+        {/* Avatar */}
+        {isCurrentUser ? (
+          <ProfileCustomizerPopover userId={currentUserId}>
+            <Avatar className={cn("h-14 w-14 ring-2 ring-border cursor-pointer", equippedRewards?.avatar_frame)}>
+              <AvatarImage src={profile.avatar_url ?? undefined} alt={profile.name} />
+              <AvatarFallback className="bg-primary/20 text-primary font-bold text-lg">
+                {getInitials(profile.name)}
+              </AvatarFallback>
+            </Avatar>
+          </ProfileCustomizerPopover>
+        ) : (
+          <Avatar className={cn("h-14 w-14 ring-2 ring-border", equippedRewards?.avatar_frame)}>
+            <AvatarImage src={profile.avatar_url ?? undefined} alt={profile.name} />
+            <AvatarFallback className="bg-primary/20 text-primary font-bold text-lg">
+              {getInitials(profile.name)}
+            </AvatarFallback>
+          </Avatar>
+        )}
 
-      {/* Name */}
-      <div className="text-center">
-        <p className="font-semibold text-sm leading-tight">
-          {profile.name}
-          {isCurrentUser && <span className="ml-1 text-xs text-muted-foreground">(you)</span>}
-        </p>
+        {/* Name + title */}
+        <div className="text-center">
+          <p className="font-semibold text-sm leading-tight">
+            {profile.name}
+            {isCurrentUser && <span className="ml-1 text-xs text-muted-foreground opacity-70">(you)</span>}
+          </p>
+          {equippedRewards?.title && (
+            <span className="mt-0.5 inline-block text-[10px] font-semibold text-primary/80 bg-primary/10 rounded-full px-2 py-0.5">
+              {equippedRewards.title}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Status */}

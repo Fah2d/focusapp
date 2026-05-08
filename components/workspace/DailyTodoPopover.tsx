@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { ListTodo, X, Plus, Loader2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { createClient } from "@/lib/supabase/client";
+import { awardXP } from "@/lib/xp-engine";
 
 interface Todo {
   id: string;
@@ -67,6 +68,9 @@ export function DailyTodoPopover({ memberId, memberName, workspaceId, isOwner }:
   async function toggleTodo(id: string, completed: boolean) {
     setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, completed: !completed } : t)));
     await supabase.from("daily_todos").update({ completed: !completed }).eq("id", id);
+    if (!completed) {
+      await awardXP(supabase, memberId, workspaceId, 15, "daily_todo_complete", { todo_id: id });
+    }
   }
 
   async function deleteTodo(id: string) {

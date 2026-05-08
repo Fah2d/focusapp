@@ -1,6 +1,8 @@
+// DEV ONLY — remove GodModeLoader import before production
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
+import GodModeLoader from "@/components/dev/GodModeLoader";
 import type { Workspace, Profile } from "@/types/database";
 
 interface LayoutProps {
@@ -66,15 +68,19 @@ export default async function WorkspaceLayout({ children, params }: LayoutProps)
   const initialStatus = (statusRaw as { status_text: string } | null)?.status_text ?? "";
 
   return (
-    <DashboardShell
-      workspace={workspace}
-      workspaces={allWorkspaces}
-      profile={profile}
-      userId={user.id}
-      workspaceId={workspaceId}
-      initialStatus={initialStatus}
-    >
-      {children}
-    </DashboardShell>
+    <>
+      <DashboardShell
+        workspace={workspace}
+        workspaces={allWorkspaces}
+        profile={profile}
+        userId={user.id}
+        userEmail={user.email ?? ""}
+        workspaceId={workspaceId}
+        initialStatus={initialStatus}
+      >
+        {children}
+      </DashboardShell>
+      <GodModeLoader userId={user.id} workspaceId={workspaceId} />
+    </>
   );
 }

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { PomodoroState, WorkspaceMemberWithProfile } from "@/types/database";
 import { usePomodoroContext } from "@/contexts/pomodoro-context";
 import { MemberCard } from "./member-card";
+import type { EquippedRewards } from "@/types/rewards";
 
 interface UserStatusRow {
   user_id: string;
@@ -48,10 +49,39 @@ export function MemberGrid({
     for (const f of initialFocusStats) map[f.user_id] = f.minutes;
     return map;
   });
+  const [equippedMap, setEquippedMap] = useState<Record<string, EquippedRewards>>({});
 
   const supabase = useMemo(() => createClient(), []);
 
   const { localState, sessionCount } = usePomodoroContext();
+
+  // Fetch equipped rewards once, then keep in sync via realtime
+  useEffect(() => {
+    const userIds = members.map((m) => m.user_id);
+    if (userIds.length === 0) return;
+    supabase
+      .from("user_equipped_rewards")
+      .select("*")
+      .in("user_id", userIds)
+      .then(({ data }) => {
+        if (!data) return;
+        const map: Record<string, EquippedRewards> = {};
+        for (const row of data as EquippedRewards[]) map[row.user_id] = row;
+        setEquippedMap(map);
+      });
+
+    const channel = supabase
+      .channel(`equipped:${workspaceId}`)
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "user_equipped_rewards",
+      }, (payload) => {
+        const row = payload.new as EquippedRewards;
+        if (row) setEquippedMap((prev) => ({ ...prev, [row.user_id]: row }));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
 
   // Stable ref so the subscribe callback always broadcasts the latest state
   const localStateRef = useRef(localState);
@@ -189,6 +219,7 @@ export function MemberGrid({
           focusMinutesToday={focusStats[member.user_id] ?? 0}
           workspaceId={workspaceId}
           currentUserId={currentUserId}
+          equippedRewards={equippedMap[member.user_id] ?? null}
         />
       ))}
     </div>

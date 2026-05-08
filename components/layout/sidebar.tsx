@@ -7,7 +7,7 @@ import {
   CheckSquare,
   Clock,
   Calendar,
-  Video,
+  Trophy,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -35,7 +35,7 @@ const navItems: NavItem[] = [
   { icon: CheckSquare, label: "To-Dos", tab: "todos" },
   { icon: Clock, label: "Deadlines", tab: "deadlines" },
   { icon: Calendar, label: "Calendar", tab: "calendar" },
-  { icon: Video, label: "Motivation", tab: "motivation" },
+  { icon: Trophy, label: "Rewards", tab: "rewards" },
   { icon: Settings, label: "Settings", tab: "settings" },
 ];
 
@@ -83,7 +83,7 @@ export function Sidebar({ workspaces, activeWorkspaceId, profile, activeTab, onT
                   className={cn(
                     "flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
                     activeTab === tab
-                      ? "bg-primary/20 text-primary"
+                      ? "bg-primary/20 text-primary ring-1 ring-inset ring-primary/30 shadow-sm"
                       : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                   )}
                 >

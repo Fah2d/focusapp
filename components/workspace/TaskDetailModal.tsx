@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, Plus, Trash2, Check, Flag, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { awardXP } from "@/lib/xp-engine";
 import type { WorkspaceTask, TaskSubtask, TaskPriority, TaskStatus } from "@/types/tasks";
 import type { Profile } from "@/types/database";
 import { formatTimeLeft, isOverdue } from "@/types/tasks";
@@ -137,6 +138,9 @@ export function TaskDetailModal({ taskId, onClose, onChanged, workspaceId, curre
     const updated = { ...sub, completed: !sub.completed };
     setSubtasks((prev) => prev.map((s) => (s.id === sub.id ? updated : s)));
     await supabase.from("task_subtasks").update({ completed: updated.completed }).eq("id", sub.id);
+    if (!sub.completed) {
+      await awardXP(supabase, currentUserId, workspaceId, 10, "subtask_complete", { subtask_id: sub.id });
+    }
   }
 
   async function deleteSubtask(subId: string) {

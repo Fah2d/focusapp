@@ -35,3 +35,6 @@ next-env.d.ts
 
 # Claude Code project settings
 .claude/
+
+# Dev-only tools
+components/dev/

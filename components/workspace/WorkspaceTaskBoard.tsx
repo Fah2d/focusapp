@@ -21,6 +21,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { createClient } from "@/lib/supabase/client";
+import { awardXP } from "@/lib/xp-engine";
 import type { WorkspaceTask, TaskStatus, TaskPriority } from "@/types/tasks";
 import { formatTimeLeft, isOverdue } from "@/types/tasks";
 import type { Profile } from "@/types/database";
@@ -340,6 +341,11 @@ export function WorkspaceTaskBoard({ workspaceId, currentUserId }: Props) {
         .update({ status: targetStatus, position: updatedCol.length - 1, updated_at: new Date().toISOString() })
         .eq("id", activeTask.id);
 
+      if (targetStatus === "done" && activeTask.status !== "done") {
+        const xpAmount = activeTask.priority === "high" ? 80 : activeTask.priority === "medium" ? 40 : 20;
+        await awardXP(supabase, currentUserId, workspaceId, xpAmount, "task_complete", { task_id: activeTask.id, priority: activeTask.priority });
+      }
+
     } else {
       // Dropped on a card
       if (over.id === active.id) return;
@@ -381,6 +387,11 @@ export function WorkspaceTaskBoard({ workspaceId, currentUserId }: Props) {
             .from("workspace_tasks")
             .update({ status: t.status, position: t.position, updated_at: new Date().toISOString() })
             .eq("id", t.id);
+          // XP for cross-column move to done
+          if (t.id === activeTask.id && t.status === "done" && activeTask.status !== "done") {
+            const xpAmount = activeTask.priority === "high" ? 80 : activeTask.priority === "medium" ? 40 : 20;
+            await awardXP(supabase, currentUserId, workspaceId, xpAmount, "task_complete", { task_id: t.id, priority: activeTask.priority });
+          }
         }
       }
     }

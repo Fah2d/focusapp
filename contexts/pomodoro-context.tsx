@@ -10,6 +10,8 @@ import {
 } from "react";
 import type { PomodoroState, TimerMode } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
+import { awardXP } from "@/lib/xp-engine";
+import { playPomodoroCompletionForPack } from "@/lib/sounds";
 import {
   DEFAULT_SETTINGS,
   type PomodoroSettingsData,
@@ -133,23 +135,8 @@ export function PomodoroProvider({ userId, workspaceId, children }: Props) {
   const playSound = useCallback(() => {
     if (!settingsRef.current.soundEnabled) return;
     try {
-      const ctx = new AudioContext();
-      for (const t of [
-        { freq: 523, start: 0,   dur: 0.3 },
-        { freq: 659, start: 0.2, dur: 0.3 },
-        { freq: 784, start: 0.4, dur: 0.5 },
-      ]) {
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.connect(g);
-        g.connect(ctx.destination);
-        osc.type = "sine";
-        osc.frequency.value = t.freq;
-        g.gain.setValueAtTime(0.3, ctx.currentTime + t.start);
-        g.gain.linearRampToValueAtTime(0, ctx.currentTime + t.start + t.dur);
-        osc.start(ctx.currentTime + t.start);
-        osc.stop(ctx.currentTime + t.start + t.dur);
-      }
+      const pack = (typeof window !== "undefined" ? localStorage.getItem("focusapp_sound_pack") : null) ?? "default";
+      playPomodoroCompletionForPack(pack);
     } catch { /* AudioContext unavailable */ }
   }, []);
 
@@ -249,6 +236,13 @@ export function PomodoroProvider({ userId, workspaceId, children }: Props) {
         if (newCount >= 4 && !longBreakUnlockedRef.current) {
           setLongBreakUnlocked(true);
           longBreakUnlockedRef.current = true;
+        }
+
+        // Award XP for pomodoro completion
+        await awardXP(supabase, userId, workspaceId, 50, "pomodoro_complete");
+        // Combo bonus every 4th session
+        if (newCount % 4 === 0) {
+          await awardXP(supabase, userId, workspaceId, 25, "combo_bonus", { session_count: newCount });
         }
       }
 

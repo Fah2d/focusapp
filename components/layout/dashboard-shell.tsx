@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { CheckSquare, Clock, Calendar, Video, Settings } from "lucide-react";
+import { useState, useEffect } from "react";
 import type { Workspace, Profile } from "@/types/database";
 import { PomodoroProvider } from "@/contexts/pomodoro-context";
 import { Sidebar } from "./sidebar";
@@ -9,46 +8,19 @@ import { Topbar } from "./topbar";
 import { WorkspaceCalendar } from "@/components/workspace/WorkspaceCalendar";
 import { WorkspaceTaskBoard } from "@/components/workspace/WorkspaceTaskBoard";
 import { WorkspaceDeadlines } from "@/components/workspace/WorkspaceDeadlines";
+import { WorkspaceSettings } from "@/components/workspace/WorkspaceSettings";
+import { RewardsHub } from "@/components/workspace/RewardsHub";
+import { XPGainAnimation } from "@/components/feedback/XPGainAnimation";
+import { LevelUpModal } from "@/components/feedback/LevelUpModal";
+import { AchievementUnlockToast } from "@/components/feedback/AchievementUnlockToast";
 
-interface PlaceholderTab {
-  icon: React.ElementType;
-  label: string;
-  description: string;
-}
-
-const placeholderTabs: Record<string, PlaceholderTab> = {
-  todos: {
-    icon: CheckSquare,
-    label: "To-Dos",
-    description: "Shared task lists for your workspace. Assign, track, and complete tasks together.",
-  },
-  deadlines: {
-    icon: Clock,
-    label: "Deadlines",
-    description: "Countdown timers for important milestones. Never miss a due date again.",
-  },
-  calendar: {
-    icon: Calendar,
-    label: "Calendar",
-    description: "A shared calendar for team events, focus blocks, and scheduled sessions.",
-  },
-  motivation: {
-    icon: Video,
-    label: "Motivation Hub",
-    description: "Curated videos and resources to keep your team inspired and energized.",
-  },
-  settings: {
-    icon: Settings,
-    label: "Settings",
-    description: "Workspace settings, member management, and notification preferences.",
-  },
-};
 
 interface Props {
   workspace: Workspace;
   workspaces: Workspace[];
   profile: Profile;
   userId: string;
+  userEmail: string;
   workspaceId: string;
   initialStatus: string;
   children: React.ReactNode;
@@ -59,17 +31,27 @@ export function DashboardShell({
   workspaces,
   profile,
   userId,
+  userEmail,
   workspaceId,
   initialStatus,
   children,
 }: Props) {
   const [activeTab, setActiveTab] = useState("home");
 
-  const implementedTabs = new Set(["home", "calendar", "todos", "deadlines"]);
-  const placeholder = !implementedTabs.has(activeTab) ? placeholderTabs[activeTab] : null;
+  useEffect(() => {
+    function onTabEvent(e: Event) {
+      const tab = (e as CustomEvent<string>).detail;
+      if (tab) setActiveTab(tab);
+    }
+    window.addEventListener("focusapp:tab", onTabEvent);
+    return () => window.removeEventListener("focusapp:tab", onTabEvent);
+  }, []);
 
   return (
     <PomodoroProvider userId={userId} workspaceId={workspaceId}>
+      <XPGainAnimation userId={userId} workspaceId={workspaceId} />
+      <LevelUpModal userId={userId} workspaceId={workspaceId} />
+      <AchievementUnlockToast userId={userId} workspaceId={workspaceId} />
       <div className="flex h-screen overflow-hidden bg-background">
         <Sidebar
           workspaces={workspaces}
@@ -88,7 +70,6 @@ export function DashboardShell({
           />
 
           <main className="flex-1 overflow-y-auto p-6">
-            {/* Always mounted — CSS show/hide preserves state across tab switches */}
             <div className={activeTab === "home" ? "h-full" : "hidden"}>
               {children}
             </div>
@@ -101,7 +82,17 @@ export function DashboardShell({
             <div className={activeTab === "deadlines" ? "h-full" : "hidden"}>
               <WorkspaceDeadlines workspaceId={workspaceId} currentUserId={userId} />
             </div>
-            {placeholder && <ComingSoon tab={placeholder} />}
+            <div className={activeTab === "settings" ? "animate-fade-in" : "hidden"}>
+              <WorkspaceSettings
+                workspace={workspace}
+                profile={profile}
+                userId={userId}
+                userEmail={userEmail}
+              />
+            </div>
+            <div className={activeTab === "rewards" ? "animate-fade-in" : "hidden"}>
+              <RewardsHub userId={userId} workspaceId={workspaceId} />
+            </div>
           </main>
         </div>
       </div>
@@ -109,22 +100,3 @@ export function DashboardShell({
   );
 }
 
-function ComingSoon({ tab }: { tab: PlaceholderTab }) {
-  const Icon = tab.icon;
-  return (
-    <div className="flex h-full items-center justify-center animate-fade-in">
-      <div className="text-center space-y-4 max-w-sm">
-        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-muted mx-auto">
-          <Icon className="h-8 w-8 text-muted-foreground" />
-        </div>
-        <div>
-          <h2 className="text-lg font-semibold">{tab.label}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{tab.description}</p>
-        </div>
-        <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-          Coming soon
-        </div>
-      </div>
-    </div>
-  );
-}
