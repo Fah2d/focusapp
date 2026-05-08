@@ -26,12 +26,24 @@ export function JoinWorkspaceModal({ open, onOpenChange, userId }: Props) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
+  function parseCode(raw: string): string {
+    try {
+      const url = new URL(raw.trim());
+      const parts = url.pathname.split("/").filter(Boolean);
+      const idx = parts.findIndex(p => p === "invite" || p === "join");
+      if (idx !== -1 && parts[idx + 1]) return parts[idx + 1];
+      return parts[parts.length - 1] ?? raw.trim();
+    } catch {
+      return raw.trim();
+    }
+  }
+
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
     if (!code.trim()) return;
     setLoading(true);
 
-    const result = await joinWorkspace(code.trim());
+    const result = await joinWorkspace(parseCode(code));
 
     if (result?.error) {
       toast({ variant: "destructive", title: "Invalid code", description: result.error });

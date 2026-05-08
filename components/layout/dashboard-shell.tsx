@@ -57,6 +57,7 @@ export function DashboardShell({
           workspaces={workspaces}
           activeWorkspaceId={workspaceId}
           profile={profile}
+          userEmail={userEmail}
           activeTab={activeTab}
           onTabChange={setActiveTab}
         />

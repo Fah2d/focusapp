@@ -3,60 +3,68 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { redirect } from "next/navigation";
+import { randomUUID } from "crypto";
 
-export async function createWorkspace(name: string): Promise<{ error: string }> {
+export async function createWorkspace(name: string): Promise<{ error: string } | void> {
   const supabase = await createClient();
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-  // DEBUG: check whether the server action is reading a valid session
-  console.log("[createWorkspace] auth.getUser →", { userId: user?.id ?? null, authError });
-
+  console.log("[createWorkspace] user:", user?.id ?? null, "authError:", authError?.message ?? null);
   if (!user) redirect("/auth/login");
 
-  // DEBUG: temporarily using service role to bypass RLS and confirm the auth
-  // session is the issue. If this succeeds but the normal insert fails, the
-  // problem is that auth.uid() is null at the DB level despite getUser() returning
-  // a user — meaning the anon-key client isn't forwarding the session JWT.
-  // TODO: remove service client and revert to `supabase` once auth is confirmed working.
-  const serviceClient = createServiceClient();
+  // Generate workspace ID upfront so we can insert both rows without
+  // needing to SELECT back after the first insert.
+  // (The workspaces SELECT policy requires membership, so INSERT...select()
+  //  returns nothing until workspace_members row exists — chicken and egg.)
+  const workspaceId = randomUUID();
 
-  const { data: workspace, error: wsError } = await serviceClient
-    .from("workspaces")
-    .insert({ name, owner_id: user.id })
-    .select()
-    .single();
+  try {
+    const { error: wsError } = await supabase
+      .from("workspaces")
+      .insert({ id: workspaceId, name, owner_id: user.id });
 
-  console.log("[createWorkspace] workspace insert →", { workspaceId: workspace?.id ?? null, wsError });
+    if (wsError) {
+      console.error("[createWorkspace] workspace insert failed:", wsError);
+      return { error: wsError.message };
+    }
 
-  if (wsError || !workspace) {
-    return { error: wsError?.message ?? "Failed to create workspace" };
+    const { error: memberError } = await supabase
+      .from("workspace_members")
+      .insert({ workspace_id: workspaceId, user_id: user.id, role: "owner" });
+
+    if (memberError) {
+      console.error("[createWorkspace] member insert failed:", memberError);
+      return { error: memberError.message };
+    }
+  } catch (err) {
+    console.error("[createWorkspace] unexpected throw:", err);
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
   }
 
-  const { error: memberError } = await supabase
-    .from("workspace_members")
-    .insert({ workspace_id: workspace.id, user_id: user.id, role: "owner" });
-
-  if (memberError) {
-    return { error: memberError.message };
-  }
-
-  redirect(`/dashboard/${workspace.id}`);
+  // redirect() throws NEXT_REDIRECT internally — must be outside try/catch
+  // so Next.js can intercept it and send the navigation response to the client.
+  redirect(`/dashboard/${workspaceId}`);
 }
 
-export async function joinWorkspace(inviteCode: string): Promise<{ error: string }> {
+export async function joinWorkspace(inviteCode: string): Promise<{ error: string } | void> {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  // Service client needed here: the user isn't a member yet so the workspaces
-  // RLS policy (select only if already a member) blocks the lookup entirely.
-  const serviceClient = createServiceClient();
+  // Service client needed: user isn't a member yet, so the workspaces SELECT
+  // RLS policy blocks the invite code lookup entirely.
+  let serviceClient;
+  try {
+    serviceClient = createServiceClient();
+  } catch (err) {
+    console.error("[joinWorkspace] failed to create service client:", err);
+    return { error: "Server configuration error. Contact support." };
+  }
 
   const { data: workspace, error: wsError } = await serviceClient
     .from("workspaces")
-    .select("id, name")
+    .select("id")
     .eq("invite_code", inviteCode.trim())
     .single();
 
@@ -64,13 +72,12 @@ export async function joinWorkspace(inviteCode: string): Promise<{ error: string
     return { error: "No workspace found with that invite code." };
   }
 
-  // Authenticated client for the insert so auth.uid() = user_id satisfies RLS.
   const { error: memberError } = await supabase
     .from("workspace_members")
     .insert({ workspace_id: workspace.id, user_id: user.id, role: "member" });
 
   if (memberError) {
-    // 23505 = unique_violation: user is already a member, just navigate there.
+    // 23505 = unique_violation: already a member, navigate there
     if (memberError.code === "23505") redirect(`/dashboard/${workspace.id}`);
     return { error: memberError.message };
   }

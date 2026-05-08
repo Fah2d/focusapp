@@ -62,6 +62,8 @@ interface MemberQueryRow {
 interface AllSessionRow {
   id: string;
   user_id: string;
+  started_at: string;
+  ended_at: string | null;
   duration_minutes: number;
   completed: boolean | null;
 }
@@ -254,7 +256,6 @@ export function ReportPanel({
 }: ReportPanelProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [allSessions, setAllSessions] = useState<AllSessionRow[]>([]);
   const [members, setMembers] = useState<ProcessedMember[]>([]);
   const [mounted, setMounted] = useState(false);
@@ -262,6 +263,9 @@ export function ReportPanel({
   const [viewMode, setViewMode] = useState<"week" | "month">("week");
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
+  // Incremented on every realtime session received for this member.
+  // Used as BarChart key to force Recharts remount and as useMemo dep.
+  const [realtimeSessionCount, setRealtimeSessionCount] = useState(0);
 
   useEffect(() => {
     setMounted(true);
@@ -270,36 +274,28 @@ export function ReportPanel({
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setSessions([]);
     setAllSessions([]);
 
     const supabase = createClient();
 
-    const [sessRes, membRes, allSessRes] = await Promise.all([
-      supabase
-        .from("pomodoro_sessions")
-        .select("id, started_at, ended_at, duration_minutes, completed")
-        .eq("user_id", memberId)
-        .eq("workspace_id", workspaceId)
-        .eq("completed", true),
+    const [membRes, allSessRes] = await Promise.all([
       supabase
         .from("workspace_members")
         .select("user_id, profiles(name)")
         .eq("workspace_id", workspaceId),
       supabase
         .from("pomodoro_sessions")
-        .select("id, user_id, duration_minutes, completed")
+        .select("id, user_id, started_at, ended_at, duration_minutes, completed")
         .eq("workspace_id", workspaceId)
-        .eq("completed", true),
+        .not("ended_at", "is", null),
     ]);
 
-    if (sessRes.error || membRes.error || allSessRes.error) {
+    if (membRes.error || allSessRes.error) {
       setError("Could not load stats. Please try again.");
       setLoading(false);
       return;
     }
 
-    setSessions((sessRes.data as SessionRow[]) ?? []);
     setAllSessions((allSessRes.data as AllSessionRow[]) ?? []);
 
     const rawMembers = (membRes.data as unknown as MemberQueryRow[]) ?? [];
@@ -311,7 +307,7 @@ export function ReportPanel({
     );
 
     setLoading(false);
-  }, [memberId, workspaceId]);
+  }, [workspaceId]);
 
   // Fetch on open; explicit memberId dep ensures re-fetch if member somehow changes
   useEffect(() => {
@@ -334,23 +330,28 @@ export function ReportPanel({
           const session = payload.new as any;
           if (!session) return;
           if (session.workspace_id !== workspaceId) return;
-          if (!session.completed) return;
+          if (!session.ended_at) return;
 
-          // Summary stats — only this member's sessions
-          if (session.user_id === memberId) {
-            setSessions(prev => {
-              const exists = prev.find(s => s.id === session.id);
-              if (exists) return prev.map(s => s.id === session.id ? session : s);
-              return [...prev, session];
-            });
-          }
+          console.log("[ReportPanel RT]", {
+            event: payload.eventType,
+            sessionId: session?.id,
+            sessionUserId: session?.user_id,
+            memberId,
+            userMatch: session?.user_id === memberId,
+            wsMatch: session?.workspace_id === workspaceId,
+            endedAt: session?.ended_at,
+            durationMinutes: session?.duration_minutes,
+          });
 
-          // Ranking — all members' sessions (single source of truth)
+          // Single source of truth — all members' sessions; histogram derives by filtering memberId
           setAllSessions(prev => {
             const exists = prev.find(s => s.id === session.id);
             if (exists) return prev.map(s => s.id === session.id ? session : s);
             return [...prev, session];
           });
+          if (session.user_id === memberId) {
+            setRealtimeSessionCount(n => n + 1);
+          }
         }
       )
       .subscribe();
@@ -358,19 +359,25 @@ export function ReportPanel({
     return () => { supabase.removeChannel(channel); };
   }, [isOpen, memberId, workspaceId]);
 
+  // Derived sessions — single source of truth (allSessions filtered by memberId)
+  const sessions = useMemo(
+    () => allSessions.filter(s => s.user_id === memberId),
+    [allSessions, memberId]
+  );
+
   // Derived stats
   const totalMinutesFocused = useMemo(() => calcTotalMinutes(sessions), [sessions]);
   const daysAccessed = useMemo(() => calcDays(sessions), [sessions]);
   const streak = useMemo(() => calcStreak(sessions), [sessions]);
 
   // Chart
-  const weekChart = useMemo(
-    () => buildWeekChart(sessions, weekOffset),
-    [sessions, weekOffset]
-  );
+  const weekChart = useMemo(() => {
+    console.log("[ReportPanel chart] sessions:", sessions.length, sessions.slice(0, 3));
+    return buildWeekChart(sessions, weekOffset);
+  }, [sessions, weekOffset, realtimeSessionCount]);
   const monthChart = useMemo(
     () => buildMonthChart(sessions, monthOffset),
-    [sessions, monthOffset]
+    [sessions, monthOffset, realtimeSessionCount]
   );
   const chart = viewMode === "week" ? weekChart : monthChart;
   const atCurrent =
@@ -395,7 +402,6 @@ export function ReportPanel({
   const ranked = useMemo(() => {
     const totals: Record<string, number> = {};
     allSessions
-      .filter(s => s.completed)
       .forEach(s => { totals[s.user_id] = (totals[s.user_id] || 0) + s.duration_minutes; });
     return members
       .map(m => ({ userId: m.userId, name: m.name, totalMinutes: totals[m.userId] || 0 }))
@@ -544,6 +550,7 @@ export function ReportPanel({
                     {mounted && (
                       <ResponsiveContainer width="100%" height={180}>
                         <BarChart
+                          key={realtimeSessionCount}
                           data={chart.data}
                           margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
                         >
