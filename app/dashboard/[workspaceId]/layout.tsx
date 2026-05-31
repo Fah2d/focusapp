@@ -2,7 +2,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import GodModeLoader from "@/components/dev/GodModeLoader";
 import type { Workspace, Profile } from "@/types/database";
 
 interface LayoutProps {
@@ -80,7 +79,6 @@ export default async function WorkspaceLayout({ children, params }: LayoutProps)
       >
         {children}
       </DashboardShell>
-      <GodModeLoader userId={user.id} workspaceId={workspaceId} />
     </>
   );
 }
