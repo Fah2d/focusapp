@@ -11,6 +11,7 @@ import {
   Settings,
   LogOut,
   Loader2,
+  Link2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Workspace, Profile } from "@/types/database";
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
   { icon: CheckSquare, label: "To-Dos", tab: "todos" },
   { icon: Clock, label: "Deadlines", tab: "deadlines" },
   { icon: Calendar, label: "Calendar", tab: "calendar" },
+  { icon: Link2, label: "Links", tab: "links" },
   { icon: Trophy, label: "Rewards", tab: "rewards" },
   { icon: Settings, label: "Settings", tab: "settings" },
 ];

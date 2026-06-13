@@ -10,6 +10,7 @@ import { WorkspaceTaskBoard } from "@/components/workspace/WorkspaceTaskBoard";
 import { WorkspaceDeadlines } from "@/components/workspace/WorkspaceDeadlines";
 import { WorkspaceSettings } from "@/components/workspace/WorkspaceSettings";
 import { RewardsHub } from "@/components/workspace/RewardsHub";
+import { WorkspaceLinks } from "@/components/workspace/WorkspaceLinks";
 import { XPGainAnimation } from "@/components/feedback/XPGainAnimation";
 import { LevelUpModal } from "@/components/feedback/LevelUpModal";
 import { AchievementUnlockToast } from "@/components/feedback/AchievementUnlockToast";
@@ -82,6 +83,9 @@ export function DashboardShell({
             </div>
             <div className={activeTab === "deadlines" ? "h-full" : "hidden"}>
               <WorkspaceDeadlines workspaceId={workspaceId} currentUserId={userId} />
+            </div>
+            <div className={activeTab === "links" ? "h-full" : "hidden"}>
+              <WorkspaceLinks workspaceId={workspaceId} currentUserId={userId} />
             </div>
             <div className={activeTab === "settings" ? "animate-fade-in" : "hidden"}>
               <WorkspaceSettings
